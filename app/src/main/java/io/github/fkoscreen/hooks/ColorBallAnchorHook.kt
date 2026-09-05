@@ -13,25 +13,86 @@ object ColorBallAnchorHook {
 
     // 1. 在 com.android.settings 中解除置灰禁用
     fun initSettings(classLoader: ClassLoader) {
+        // A. Hook ScreenColorTemperateBallPreference
         try {
             val prefClass = XposedHelpers.findClass(
                 "com.oplus.settings.feature.display.screencolortemp.ScreenColorTemperateBallPreference",
                 classLoader
             )
+            XposedBridge.hookAllMethods(prefClass, "setEnabled", object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    if (ConfigManager.isColorBallAnchorEnabled()) {
+                        param.args[0] = true
+                    }
+                }
+            })
             XposedBridge.hookAllMethods(prefClass, "onBindViewHolder", object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     if (!ConfigManager.isColorBallAnchorEnabled()) return
                     try {
-                        // 强制保持色温球可用状态，解除环境自适应/护眼开启时的 setEnabled(false)
                         XposedHelpers.callMethod(param.thisObject, "setEnabled", true)
                     } catch (e: Throwable) {
                         XposedBridge.log("$TAG: setEnabled true error: ${e.message}")
                     }
                 }
             })
-            XposedBridge.log("$TAG: Hooked ScreenColorTemperateBallPreference.onBindViewHolder")
+            XposedBridge.log("$TAG: Hooked ScreenColorTemperateBallPreference")
         } catch (t: Throwable) {
             XposedBridge.log("$TAG: Failed to hook ScreenColorTemperateBallPreference: ${t.message}")
+        }
+
+        // B. Hook ScreenColorTemperateBall (View 层)
+        try {
+            val ballClass = XposedHelpers.findClass(
+                "com.oplus.settings.feature.display.screencolortemp.ScreenColorTemperateBall",
+                classLoader
+            )
+            XposedBridge.hookAllMethods(ballClass, "setEnabled", object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    if (ConfigManager.isColorBallAnchorEnabled()) {
+                        param.args[0] = true
+                    }
+                }
+            })
+            XposedBridge.hookAllMethods(ballClass, "isEnabled", object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    if (ConfigManager.isColorBallAnchorEnabled()) {
+                        param.result = true
+                    }
+                }
+            })
+            XposedBridge.log("$TAG: Hooked ScreenColorTemperateBall view")
+        } catch (t: Throwable) {
+            XposedBridge.log("$TAG: Failed to hook ScreenColorTemperateBall: ${t.message}")
+        }
+
+        // C. Hook ColorModeFragment (Fragment 页面控制器层)
+        try {
+            val fragmentClass = XposedHelpers.findClass(
+                "com.oplus.settings.feature.display.protecteyes.ColorModeFragment",
+                classLoader
+            )
+            XposedBridge.hookAllMethods(fragmentClass, "updateScreenColorTemperatureState", object : XC_MethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    if (!ConfigManager.isColorBallAnchorEnabled()) return
+                    try {
+                        val ballPref = XposedHelpers.getObjectField(param.thisObject, "mScreenColorTempBallPref")
+                        if (ballPref != null) {
+                            XposedHelpers.callMethod(ballPref, "setEnabled", true)
+                        }
+                        // 隐藏置灰提示语（如“护眼模式开启时不可调节”或“环境色自适应开启时不可调节”）
+                        val tipPref = XposedHelpers.getObjectField(param.thisObject, "mScreenColorSummary")
+                        if (tipPref != null) {
+                            XposedHelpers.callMethod(tipPref, "setVisible", false)
+                        }
+                    } catch (e: Throwable) {
+                        XposedBridge.log("$TAG: updateScreenColorTemperatureState error: ${e.message}")
+                    }
+                }
+            })
+            XposedBridge.log("$TAG: Hooked ColorModeFragment.updateScreenColorTemperatureState")
+        } catch (t: Throwable) {
+            XposedBridge.log("$TAG: Failed to hook ColorModeFragment: ${t.message}")
         }
     }
 

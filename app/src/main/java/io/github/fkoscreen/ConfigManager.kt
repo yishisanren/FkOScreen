@@ -28,23 +28,43 @@ object ConfigManager {
     }
 
     fun isManual1250Enabled(): Boolean {
-        return getXPrefs().getBoolean(KEY_MANUAL_1250, true)
+        return try {
+            getXPrefs().getBoolean(KEY_MANUAL_1250, true)
+        } catch (_: Throwable) {
+            true
+        }
     }
 
     fun isFossBypassEnabled(): Boolean {
-        return getXPrefs().getBoolean(KEY_FOSS_BYPASS, true)
+        return try {
+            getXPrefs().getBoolean(KEY_FOSS_BYPASS, true)
+        } catch (_: Throwable) {
+            true
+        }
     }
 
     fun isHdrRatioEnabled(): Boolean {
-        return getXPrefs().getBoolean(KEY_HDR_RATIO, true)
+        return try {
+            getXPrefs().getBoolean(KEY_HDR_RATIO, true)
+        } catch (_: Throwable) {
+            true
+        }
     }
 
     fun isDarkModeStylesEnabled(): Boolean {
-        return getXPrefs().getBoolean(KEY_DARK_MODE_STYLES, true)
+        return try {
+            getXPrefs().getBoolean(KEY_DARK_MODE_STYLES, true)
+        } catch (_: Throwable) {
+            true
+        }
     }
 
     fun isColorBallAnchorEnabled(): Boolean {
-        return getXPrefs().getBoolean(KEY_COLOR_BALL_ANCHOR, true)
+        return try {
+            getXPrefs().getBoolean(KEY_COLOR_BALL_ANCHOR, true)
+        } catch (_: Throwable) {
+            true
+        }
     }
 
     fun getAppPrefs(context: Context): SharedPreferences {
@@ -58,6 +78,9 @@ object ConfigManager {
                 prefsFile.setReadable(true, false)
                 prefsFile.parentFile?.setReadable(true, false)
                 prefsFile.parentFile?.setExecutable(true, false)
+                // 确保 /data/data/io.github.fkoscreen 目录对其它 UID 具有 +x 遍历权限
+                context.filesDir.parentFile?.setExecutable(true, false)
+                context.filesDir.parentFile?.setReadable(true, false)
             }
         } catch (_: Exception) {}
     }

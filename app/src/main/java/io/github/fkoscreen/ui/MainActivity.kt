@@ -51,6 +51,19 @@ fun MainScreen() {
         ConfigManager.fixPermissions(context)
     }
 
+    LaunchedEffect(Unit) {
+        if (!prefs.contains(ConfigManager.KEY_MANUAL_1250)) {
+            prefs.edit()
+                .putBoolean(ConfigManager.KEY_MANUAL_1250, true)
+                .putBoolean(ConfigManager.KEY_FOSS_BYPASS, true)
+                .putBoolean(ConfigManager.KEY_HDR_RATIO, true)
+                .putBoolean(ConfigManager.KEY_DARK_MODE_STYLES, true)
+                .putBoolean(ConfigManager.KEY_COLOR_BALL_ANCHOR, true)
+                .apply()
+        }
+        ConfigManager.fixPermissions(context)
+    }
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = if (isDark) MiuixColors.BackgroundDark else MiuixColors.BackgroundLight
