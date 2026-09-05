@@ -12,12 +12,13 @@ class HookInit : IXposedHookLoadPackage {
 
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
         when (lpparam.packageName) {
-            "android" -> {
-                XposedBridge.log("$TAG: Hooking system_server (Display & Brightness Engine)...")
+            "android", "com.android.providers.settings" -> {
+                XposedBridge.log("$TAG: Hooking system_server / SettingsProvider...")
                 BrightnessLimitHook.init(lpparam.classLoader)
                 FossBypassHook.init(lpparam.classLoader)
                 HdrRatioHook.init(lpparam.classLoader)
                 ColorBallAnchorHook.initSystemServer(lpparam.classLoader)
+                SettingsProviderHook.init(lpparam.classLoader)
             }
             "com.android.settings" -> {
                 XposedBridge.log("$TAG: Hooking com.android.settings (UI & Controls)...")

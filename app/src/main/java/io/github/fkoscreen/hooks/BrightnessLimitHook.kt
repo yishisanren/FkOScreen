@@ -7,27 +7,39 @@ import io.github.fkoscreen.ConfigManager
 
 object BrightnessLimitHook {
     private const val TAG = "FkOScreen:BrightnessLimit"
-    // 杜比视界上限 1250 nits 对应硬件亮度档位 4543.0f (SDR 原厂封顶 4095.0f = 800 nits)
-    const val DOLBY_MAX_BRIGHTNESS = 4543.0f
-    const val DOLBY_MAX_NIT = 1250.0f
-
-    // 硬件极限峰值 1600 nits 对应硬件亮度档位 4674.0f (mTotalBrightness)
-    const val PEAK_1600_BRIGHTNESS = 4674.0f
-    const val PEAK_1600_NIT = 1600.0f
+    // 动态硬件参数缓存（默认以硬件出厂标称兜底，系统启动后自动从底层模型中刷新更新，彻底解耦硬编码）
+    @Volatile private var mCachedPanelPeakBrightness: Float = 4674.0f
+    @Volatile private var mCachedPanelPeakNit: Float = 1600.0f
+    @Volatile private var mCachedHbmBrightness: Float = 4543.0f
+    @Volatile private var mCachedHbmNit: Float = 1250.0f
+    @Volatile private var sBrightnessModel: Any? = null
 
     fun getTargetBrightness(): Float? {
         return when {
-            ConfigManager.isManual1600Enabled() -> PEAK_1600_BRIGHTNESS
-            ConfigManager.isManual1250Enabled() -> DOLBY_MAX_BRIGHTNESS
+            ConfigManager.isManualPeakEnabled() -> mCachedPanelPeakBrightness
+            ConfigManager.isManualHbmEnabled() -> mCachedHbmBrightness
             else -> null
         }
     }
 
     fun getTargetNit(): Float? {
         return when {
-            ConfigManager.isManual1600Enabled() -> PEAK_1600_NIT
-            ConfigManager.isManual1250Enabled() -> DOLBY_MAX_NIT
+            ConfigManager.isManualPeakEnabled() -> mCachedPanelPeakNit
+            ConfigManager.isManualHbmEnabled() -> mCachedHbmNit
             else -> null
+        }
+    }
+
+    private fun updateHbmNit(nit: Float) {
+        if (nit <= 0f) return
+        mCachedHbmNit = nit
+        sBrightnessModel?.let { model ->
+            try {
+                val b = XposedHelpers.callMethod(model, "getBrightnessFromNit", nit) as? Float
+                if (b != null && b > 0f) {
+                    mCachedHbmBrightness = b
+                }
+            } catch (_: Throwable) {}
         }
     }
 
@@ -97,7 +109,7 @@ object BrightnessLimitHook {
             XposedBridge.log("$TAG: Failed to hook OplusFeatureWindowBrightness: ${t.message}")
         }
 
-        // 4. 拦截 OplusDisplayBrightnessModel 关键上限方法
+        // 4. 拦截 OplusDisplayBrightnessModel 关键上限方法并动态捕获硬件极值
         try {
             val brightnessModelClass = XposedHelpers.findClass(
                 "com.android.server.display.model.OplusDisplayBrightnessModel",
@@ -105,24 +117,33 @@ object BrightnessLimitHook {
             )
             XposedBridge.hookAllMethods(brightnessModelClass, "getMaxBrightness", object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
+                    sBrightnessModel = param.thisObject
                     val target = getTargetBrightness() ?: return
                     param.result = target
                 }
             })
             XposedBridge.hookAllMethods(brightnessModelClass, "getMaxPanelNit", object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
+                    sBrightnessModel = param.thisObject
+                    val origNit = (param.result as? Number)?.toFloat() ?: 0f
+                    if (origNit > 0f) {
+                        mCachedPanelPeakNit = origNit
+                    }
                     val targetNit = getTargetNit() ?: return
-                    val current = (param.result as? Number)?.toFloat() ?: 0f
-                    if (current < targetNit) {
+                    if (origNit < targetNit) {
                         param.result = targetNit
                     }
                 }
             })
             XposedBridge.hookAllMethods(brightnessModelClass, "getTotalBrightness", object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
+                    sBrightnessModel = param.thisObject
+                    val origTotal = (param.result as? Number)?.toFloat() ?: 0f
+                    if (origTotal > 0f) {
+                        mCachedPanelPeakBrightness = origTotal
+                    }
                     val target = getTargetBrightness() ?: return
-                    val current = (param.result as? Number)?.toFloat() ?: 0f
-                    if (current < target) {
+                    if (origTotal < target) {
                         param.result = target
                     }
                 }
@@ -132,7 +153,61 @@ object BrightnessLimitHook {
             XposedBridge.log("$TAG: Failed to hook OplusDisplayBrightnessModel: ${t.message}")
         }
 
-        // 5. 拦截 DisplayPowerController，扩展 AOSP 内部普通最大亮度限制
+        // 5. 拦截 OplusFeatureEdrEnhanceBrightness 动态捕获 HBM 阈值
+        try {
+            val edrClass = XposedHelpers.findClass(
+                "com.android.server.display.feature.postprocess.OplusFeatureEdrEnhanceBrightness",
+                classLoader
+            )
+            XposedBridge.hookAllMethods(edrClass, "getEdrNormalLimit", object : XC_MethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    val edrNit = (param.result as? Number)?.toFloat() ?: 0f
+                    if (edrNit > 0f) {
+                        updateHbmNit(edrNit)
+                    }
+                }
+            })
+            XposedBridge.log("$TAG: Hooked OplusFeatureEdrEnhanceBrightness.getEdrNormalLimit")
+        } catch (t: Throwable) {
+            XposedBridge.log("$TAG: Failed to hook OplusFeatureEdrEnhanceBrightness: ${t.message}")
+        }
+
+        // 6. 拦截 OplusFeatureTemperatureLimitBrightness（解除温度对亮度限制）
+        try {
+            val tempLimitClass = XposedHelpers.findClass(
+                "com.android.server.display.feature.postprocess.OplusFeatureTemperatureLimitBrightness",
+                classLoader
+            )
+            // 拦截温控后处理：高温时不再强行削减 Nit 与降低调整速率
+            XposedBridge.hookAllMethods(tempLimitClass, "postProcessing", object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    if (ConfigManager.isThermalBypassEnabled()) {
+                        param.result = null
+                    }
+                }
+            })
+            // 拦截单点查询 getbrightness：直接返回未截断的目标 Nit
+            XposedBridge.hookAllMethods(tempLimitClass, "getbrightness", object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    if (ConfigManager.isThermalBypassEnabled()) {
+                        param.result = param.args[0]
+                    }
+                }
+            })
+            // 拦截温控状态查询：返回 false 表示未受到温控限制
+            XposedBridge.hookAllMethods(tempLimitClass, "isMaxBrightnessLimit", object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    if (ConfigManager.isThermalBypassEnabled()) {
+                        param.result = false
+                    }
+                }
+            })
+            XposedBridge.log("$TAG: Hooked OplusFeatureTemperatureLimitBrightness (Thermal Bypass)")
+        } catch (t: Throwable) {
+            XposedBridge.log("$TAG: Failed to hook OplusFeatureTemperatureLimitBrightness: ${t.message}")
+        }
+
+        // 7. 拦截 DisplayPowerController，扩展 AOSP 内部普通最大亮度限制
         try {
             val dpcClass = XposedHelpers.findClass(
                 "com.android.server.display.DisplayPowerController",
@@ -155,7 +230,7 @@ object BrightnessLimitHook {
             XposedBridge.log("$TAG: Failed to hook DisplayPowerController: ${t.message}")
         }
 
-        // 6. 拦截 DisplayManagerService.getBrightnessInfo，修改返回给外部的 brightnessMaximum
+        // 8. 拦截 DisplayManagerService.getBrightnessInfo，修改返回给外部的 brightnessMaximum
         try {
             val dmsClass = XposedHelpers.findClass(
                 "com.android.server.display.DisplayManagerService",
