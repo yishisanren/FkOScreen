@@ -27,6 +27,7 @@ class HookInit : IXposedHookLoadPackage {
             "com.android.systemui" -> {
                 XposedBridge.log("$TAG: Hooking com.android.systemui (HDR & QuickSettings)...")
                 HdrRatioHook.init(lpparam.classLoader)
+                BrightnessLimitHook.initSystemUI(lpparam.classLoader)
             }
         }
     }

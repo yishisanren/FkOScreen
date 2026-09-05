@@ -50,6 +50,9 @@ fun MainScreen() {
     fun updatePref(key: String, value: Boolean) {
         prefs.edit().putBoolean(key, value).apply()
         ConfigManager.fixPermissions(context)
+        try {
+            android.provider.Settings.System.putInt(context.contentResolver, key, if (value) 1 else 0)
+        } catch (_: Throwable) {}
     }
 
     LaunchedEffect(Unit) {
@@ -64,6 +67,10 @@ fun MainScreen() {
                 .apply()
         }
         ConfigManager.fixPermissions(context)
+        try {
+            android.provider.Settings.System.putInt(context.contentResolver, ConfigManager.KEY_MANUAL_1250, if (manual1250) 1 else 0)
+            android.provider.Settings.System.putInt(context.contentResolver, ConfigManager.KEY_MANUAL_1600, if (manual1600) 1 else 0)
+        } catch (_: Throwable) {}
     }
 
     Scaffold(

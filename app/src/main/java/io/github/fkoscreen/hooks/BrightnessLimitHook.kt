@@ -32,7 +32,11 @@ object BrightnessLimitHook {
     }
 
     fun init(classLoader: ClassLoader) {
-        // 1. 拦截 OplusFeatureIncreaseBrightnessRange，拓展正常手动最高亮度
+        initSystemServer(classLoader)
+    }
+
+    fun initSystemServer(classLoader: ClassLoader) {
+        // 1. 拦截 OplusFeatureIncreaseBrightnessRange
         try {
             val increaseRangeClass = XposedHelpers.findClass(
                 "com.android.server.display.feature.postprocess.OplusFeatureIncreaseBrightnessRange",
@@ -49,7 +53,7 @@ object BrightnessLimitHook {
             XposedBridge.log("$TAG: Failed to hook OplusFeatureIncreaseBrightnessRange: ${t.message}")
         }
 
-        // 2. 拦截 OplusBrightnessPostProcessingManager，同步最大正常亮度
+        // 2. 拦截 OplusBrightnessPostProcessingManager
         try {
             val postProcessingMgrClass = XposedHelpers.findClass(
                 "com.android.server.display.feature.postprocess.OplusBrightnessPostProcessingManager",
@@ -66,7 +70,7 @@ object BrightnessLimitHook {
             XposedBridge.log("$TAG: Failed to hook OplusBrightnessPostProcessingManager: ${t.message}")
         }
 
-        // 3. 拦截 OplusFeatureWindowBrightness，将窗口亮度硬上限提升至目标 Nit
+        // 3. 拦截 OplusFeatureWindowBrightness：loadWindowMaxBrightnessLimitInfo 与 postProcessing
         try {
             val windowBrightnessClass = XposedHelpers.findClass(
                 "com.android.server.display.feature.postprocess.OplusFeatureWindowBrightness",
@@ -80,12 +84,20 @@ object BrightnessLimitHook {
                     } catch (_: Throwable) {}
                 }
             })
-            XposedBridge.log("$TAG: Hooked OplusFeatureWindowBrightness.loadWindowMaxBrightnessLimitInfo")
+            XposedBridge.hookAllMethods(windowBrightnessClass, "postProcessing", object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    val targetNit = getTargetNit() ?: return
+                    try {
+                        XposedHelpers.setFloatField(param.thisObject, "mLimitNit", targetNit)
+                    } catch (_: Throwable) {}
+                }
+            })
+            XposedBridge.log("$TAG: Hooked OplusFeatureWindowBrightness limits")
         } catch (t: Throwable) {
             XposedBridge.log("$TAG: Failed to hook OplusFeatureWindowBrightness: ${t.message}")
         }
 
-        // 4. 拦截 OplusDisplayBrightnessModel 关键上限方法，确保模型内部一致性
+        // 4. 拦截 OplusDisplayBrightnessModel 关键上限方法
         try {
             val brightnessModelClass = XposedHelpers.findClass(
                 "com.android.server.display.model.OplusDisplayBrightnessModel",
@@ -119,5 +131,67 @@ object BrightnessLimitHook {
         } catch (t: Throwable) {
             XposedBridge.log("$TAG: Failed to hook OplusDisplayBrightnessModel: ${t.message}")
         }
+
+        // 5. 拦截 DisplayPowerController，扩展 AOSP 内部普通最大亮度限制
+        try {
+            val dpcClass = XposedHelpers.findClass(
+                "com.android.server.display.DisplayPowerController",
+                classLoader
+            )
+            XposedBridge.hookAllMethods(dpcClass, "setScreenBrightnessNormalMaximum", object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    val target = getTargetBrightness() ?: return
+                    param.args[0] = target
+                }
+            })
+            XposedBridge.hookAllMethods(dpcClass, "getScreenBrightnessNormalMaximum", object : XC_MethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    val target = getTargetBrightness() ?: return
+                    param.result = target
+                }
+            })
+            XposedBridge.log("$TAG: Hooked DisplayPowerController normal maximum brightness")
+        } catch (t: Throwable) {
+            XposedBridge.log("$TAG: Failed to hook DisplayPowerController: ${t.message}")
+        }
+
+        // 6. 拦截 DisplayManagerService.getBrightnessInfo，修改返回给外部的 brightnessMaximum
+        try {
+            val dmsClass = XposedHelpers.findClass(
+                "com.android.server.display.DisplayManagerService",
+                classLoader
+            )
+            XposedBridge.hookAllMethods(dmsClass, "getBrightnessInfo", object : XC_MethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    val info = param.result ?: return
+                    val target = getTargetBrightness() ?: return
+                    try {
+                        XposedHelpers.setFloatField(info, "brightnessMaximum", target)
+                    } catch (_: Throwable) {}
+                }
+            })
+            XposedBridge.log("$TAG: Hooked DisplayManagerService.getBrightnessInfo")
+        } catch (t: Throwable) {
+            XposedBridge.log("$TAG: Failed to hook DisplayManagerService.getBrightnessInfo: ${t.message}")
+        }
+    }
+
+    fun initSystemUI(classLoader: ClassLoader) {
+        // 7. 拦截 SystemUI BrightnessController，拓宽滑块组件上限
+        try {
+            val bcClass = XposedHelpers.findClass(
+                "com.android.systemui.settings.brightness.BrightnessController",
+                classLoader
+            )
+            XposedBridge.hookAllConstructors(bcClass, object : XC_MethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    val target = getTargetBrightness() ?: return
+                    try {
+                        XposedHelpers.setFloatField(param.thisObject, "mBrightnessMax", target)
+                    } catch (_: Throwable) {}
+                }
+            })
+            XposedBridge.log("$TAG: Hooked SystemUI BrightnessController")
+        } catch (_: Throwable) {}
     }
 }
