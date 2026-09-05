@@ -96,48 +96,157 @@ object ColorBallAnchorHook {
         }
     }
 
-    // 2. 在 system_server 中将色温球 RGB 矩阵与动态矩阵复合相乘 (M_final = M_adaptive * M_ball)
+    // 2. 在 system_server 中将色温球基准注入底层 CCT 插值与实时下发链路
     fun initSystemServer(classLoader: ClassLoader) {
+        val rgbBallClassName = "com.android.server.display.color.eyeprotect.manager.OplusRgbBallManager"
+        val cctUtilClassName = "com.android.server.display.color.eyeprotect.util.CCTCoefficientUtil"
+        val protectEyesUtilClassName = "com.android.server.display.color.eyeprotect.util.ProtectEyesUtil"
+        val reduceSaturationUtilClassName = "com.android.server.display.color.eyeprotect.util.OplusReduceSaturationUtil"
+
+        val rgbBallClass = try {
+            XposedHelpers.findClass(rgbBallClassName, classLoader)
+        } catch (t: Throwable) {
+            XposedBridge.log("$TAG: Failed to find $rgbBallClassName: ${t.message}")
+            return
+        }
+
+        val cctUtilClass = try {
+            XposedHelpers.findClass(cctUtilClassName, classLoader)
+        } catch (t: Throwable) {
+            XposedBridge.log("$TAG: Failed to find $cctUtilClassName: ${t.message}")
+            return
+        }
+
+        val protectEyesUtilClass = try {
+            XposedHelpers.findClass(protectEyesUtilClassName, classLoader)
+        } catch (t: Throwable) {
+            XposedBridge.log("$TAG: Failed to find $protectEyesUtilClassName: ${t.message}")
+            null
+        }
+
+        val reduceSaturationUtilClass = try {
+            XposedHelpers.findClass(reduceSaturationUtilClassName, classLoader)
+        } catch (t: Throwable) {
+            XposedBridge.log("$TAG: Failed to find $reduceSaturationUtilClassName: ${t.message}")
+            null
+        }
+
+        // 核心 Hook 1: 拦截所有护眼/自适应色彩场景下的 CCT 插值结果，注入色温球基准 (M_cct_anchored = M_cct * M_ball)
         try {
-            val eyeProtectMgrClass = XposedHelpers.findClass(
-                "com.android.server.display.color.eyeprotect.OplusEyeProtectManager",
-                classLoader
-            )
-            XposedBridge.hookAllMethods(eyeProtectMgrClass, "applyAdjustValues", object : XC_MethodHook() {
-                override fun beforeHookedMethod(param: MethodHookParam) {
+            XposedBridge.hookAllMethods(cctUtilClass, "interpolate", object : XC_MethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
                     if (!ConfigManager.isColorBallAnchorEnabled()) return
-                    try {
-                        val mainPair = param.args[0] as? Pair<*, *> ?: return
-                        val firstMatrix = mainPair.first as? FloatArray ?: return
-                        if (firstMatrix.size != 16) return
+                    val pair = param.result as? Pair<*, *> ?: return
+                    val mainRGB = pair.first ?: return
 
-                        // 获取全局 Settings 中的 eyeprotect_rgb
-                        val ctx = XposedHelpers.getObjectField(param.thisObject, "mContext") as? android.content.Context
-                            ?: return
-                        val rgbStr = Settings.System.getString(ctx.contentResolver, "eyeprotect_rgb") ?: return
-                        val parts = rgbStr.split(",")
-                        if (parts.size >= 3) {
-                            val r = parts[0].toFloatOrNull() ?: 1000f
-                            val g = parts[1].toFloatOrNull() ?: 1000f
-                            val b = parts[2].toFloatOrNull() ?: 1000f
+                    // 获取当前系统已设置的色温球物理白点基准
+                    val ballMgr = XposedHelpers.callStaticMethod(rgbBallClass, "getInstance") ?: return
+                    val curRGB = XposedHelpers.getObjectField(ballMgr, "mCurRGB") ?: return
+                    val ballR = XposedHelpers.getIntField(curRGB, "red")
+                    val ballG = XposedHelpers.getIntField(curRGB, "green")
+                    val ballB = XposedHelpers.getIntField(curRGB, "blue")
 
-                            // 若非默认 1000, 1000, 1000，执行基底矩阵缩放 (R_out = R_in * r/1000)
-                            if (r != 1000f || g != 1000f || b != 1000f) {
-                                val rGain = (r / 1000f).coerceIn(0.5f, 1.0f)
-                                val gGain = (g / 1000f).coerceIn(0.5f, 1.0f)
-                                val bGain = (b / 1000f).coerceIn(0.5f, 1.0f)
+                    if (ballR == 1000 && ballG == 1000 && ballB == 1000) return
 
-                                firstMatrix[0] = (firstMatrix[0] * rGain).coerceIn(0f, 1f)
-                                firstMatrix[5] = (firstMatrix[5] * gGain).coerceIn(0f, 1f)
-                                firstMatrix[10] = (firstMatrix[10] * bGain).coerceIn(0f, 1f)
-                            }
-                        }
-                    } catch (_: Throwable) {}
+                    val rGain = (ballR / 1000f).coerceIn(0.1f, 1.0f)
+                    val gGain = (ballG / 1000f).coerceIn(0.1f, 1.0f)
+                    val bGain = (ballB / 1000f).coerceIn(0.1f, 1.0f)
+
+                    val origR = XposedHelpers.getIntField(mainRGB, "red")
+                    val origG = XposedHelpers.getIntField(mainRGB, "green")
+                    val origB = XposedHelpers.getIntField(mainRGB, "blue")
+
+                    XposedHelpers.setIntField(mainRGB, "red", Math.round(origR * rGain).coerceIn(0, 1000))
+                    XposedHelpers.setIntField(mainRGB, "green", Math.round(origG * gGain).coerceIn(0, 1000))
+                    XposedHelpers.setIntField(mainRGB, "blue", Math.round(origB * bGain).coerceIn(0, 1000))
+
+                    val subRGB = pair.second
+                    if (subRGB != null) {
+                        val subOrigR = XposedHelpers.getIntField(subRGB, "red")
+                        val subOrigG = XposedHelpers.getIntField(subRGB, "green")
+                        val subOrigB = XposedHelpers.getIntField(subRGB, "blue")
+                        XposedHelpers.setIntField(subRGB, "red", Math.round(subOrigR * rGain).coerceIn(0, 1000))
+                        XposedHelpers.setIntField(subRGB, "green", Math.round(subOrigG * gGain).coerceIn(0, 1000))
+                        XposedHelpers.setIntField(subRGB, "blue", Math.round(subOrigB * bGain).coerceIn(0, 1000))
+                    }
                 }
             })
-            XposedBridge.log("$TAG: Hooked OplusEyeProtectManager.applyAdjustValues")
+            XposedBridge.log("$TAG: Hooked CCTCoefficientUtil.interpolate for anchor scaling")
         } catch (t: Throwable) {
-            XposedBridge.log("$TAG: Failed to hook OplusEyeProtectManager: ${t.message}")
+            XposedBridge.log("$TAG: Failed to hook CCTCoefficientUtil.interpolate: ${t.message}")
+        }
+
+        // 核心 Hook 2: 解除护眼/自适应模式下拖拽色温球的熔断阻断，实现 0ms 实时下发至硬件管线
+        try {
+            XposedBridge.hookAllMethods(rgbBallClass, "updateEyeProtectRGB", object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    if (!ConfigManager.isColorBallAnchorEnabled()) return
+                    val resolver = param.args[0] as? ContentResolver ?: return
+                    val userHandle = param.args[1] as Int
+
+                    val isOther = XposedHelpers.callMethod(
+                        param.thisObject,
+                        "isOtherColorTemperatureChangeScene",
+                        resolver,
+                        userHandle
+                    ) as? Boolean ?: false
+
+                    if (isOther) {
+                        // 1. 同步加载最新的 eyeprotect_rgb 到 mCurRGB
+                        XposedHelpers.callMethod(param.thisObject, "initCurRGB")
+
+                        // 2. 中止可能正在执行的过渡动画，确保手势跟手无卡顿
+                        try {
+                            val animator = XposedHelpers.getObjectField(param.thisObject, "mValueAnimator") as? android.animation.ValueAnimator
+                            if (animator != null && animator.isRunning) {
+                                animator.cancel()
+                            }
+                            XposedHelpers.setBooleanField(param.thisObject, "mRGBAnimating", false)
+                        } catch (_: Throwable) {}
+
+                        // 3. 刷新灰阶/阅读模式状态
+                        try {
+                            XposedHelpers.callMethod(param.thisObject, "updateGraySacleMode")
+                        } catch (_: Throwable) {}
+
+                        // 4. 获取当前生效的 CCT
+                        val currentCCT = if (protectEyesUtilClass != null) {
+                            try {
+                                XposedHelpers.callStaticMethod(
+                                    protectEyesUtilClass,
+                                    "getDisplayCCT",
+                                    resolver,
+                                    6500,
+                                    userHandle
+                                ) as Int
+                            } catch (_: Throwable) { 6500 }
+                        } else 6500
+
+                        // 5. 执行插值（经过 interpolate hook 会自动附带色温球缩放基准）
+                        val pair = XposedHelpers.callStaticMethod(
+                            cctUtilClass,
+                            "interpolate",
+                            currentCCT.toFloat()
+                        ) as? Pair<*, *>
+
+                        if (pair != null && pair.first != null && reduceSaturationUtilClass != null) {
+                            val mainRGB = pair.first
+                            val mMode = XposedHelpers.getIntField(param.thisObject, "mMode")
+                            // 立即下发至屏幕管线，0ms 触控响应
+                            XposedHelpers.callStaticMethod(reduceSaturationUtilClass, "setRGB", mainRGB, mMode)
+                            try {
+                                XposedHelpers.callMethod(param.thisObject, "updateAnimatingRGB", currentCCT)
+                            } catch (_: Throwable) {}
+                        }
+
+                        // 拦截原有空 return 熔断
+                        param.result = null
+                    }
+                }
+            })
+            XposedBridge.log("$TAG: Hooked OplusRgbBallManager.updateEyeProtectRGB for realtime drag response")
+        } catch (t: Throwable) {
+            XposedBridge.log("$TAG: Failed to hook OplusRgbBallManager.updateEyeProtectRGB: ${t.message}")
         }
     }
 }

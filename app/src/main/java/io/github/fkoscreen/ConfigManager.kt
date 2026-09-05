@@ -10,6 +10,7 @@ object ConfigManager {
     const val PREFS_NAME = "fkoscreen_prefs"
 
     const val KEY_MANUAL_1250 = "manual_1250_brightness"
+    const val KEY_MANUAL_1600 = "manual_1600_brightness"
     const val KEY_FOSS_BYPASS = "foss_bypass"
     const val KEY_HDR_RATIO = "hdr_ratio_fix"
     const val KEY_DARK_MODE_STYLES = "dark_mode_styles"
@@ -32,6 +33,14 @@ object ConfigManager {
             getXPrefs().getBoolean(KEY_MANUAL_1250, true)
         } catch (_: Throwable) {
             true
+        }
+    }
+
+    fun isManual1600Enabled(): Boolean {
+        return try {
+            getXPrefs().getBoolean(KEY_MANUAL_1600, false)
+        } catch (_: Throwable) {
+            false
         }
     }
 

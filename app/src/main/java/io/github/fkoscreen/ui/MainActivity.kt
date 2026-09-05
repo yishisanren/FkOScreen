@@ -41,6 +41,7 @@ fun MainScreen() {
     val prefs = remember { ConfigManager.getAppPrefs(context) }
 
     var manual1250 by remember { mutableStateOf(prefs.getBoolean(ConfigManager.KEY_MANUAL_1250, true)) }
+    var manual1600 by remember { mutableStateOf(prefs.getBoolean(ConfigManager.KEY_MANUAL_1600, false)) }
     var fossBypass by remember { mutableStateOf(prefs.getBoolean(ConfigManager.KEY_FOSS_BYPASS, true)) }
     var hdrRatio by remember { mutableStateOf(prefs.getBoolean(ConfigManager.KEY_HDR_RATIO, true)) }
     var darkModeStyles by remember { mutableStateOf(prefs.getBoolean(ConfigManager.KEY_DARK_MODE_STYLES, true)) }
@@ -55,6 +56,7 @@ fun MainScreen() {
         if (!prefs.contains(ConfigManager.KEY_MANUAL_1250)) {
             prefs.edit()
                 .putBoolean(ConfigManager.KEY_MANUAL_1250, true)
+                .putBoolean(ConfigManager.KEY_MANUAL_1600, false)
                 .putBoolean(ConfigManager.KEY_FOSS_BYPASS, true)
                 .putBoolean(ConfigManager.KEY_HDR_RATIO, true)
                 .putBoolean(ConfigManager.KEY_DARK_MODE_STYLES, true)
@@ -76,14 +78,14 @@ fun MainScreen() {
         ) {
             MiuixTopAppBar(
                 title = "FkOScreen",
-                subtitle = "OPPO Pad Mini 显示与色彩科学增强 (ColorOS 16)"
+                subtitle = "ColorOS 屏幕显示与色彩增强"
             )
 
-            // 卡片 1：亮度与画质引擎
-            MiuixCard(title = "亮度与画质引擎") {
+            // 卡片 1：亮度与 HDR
+            MiuixCard(title = "屏幕亮度与 HDR") {
                 MiuixPreferenceItem(
-                    title = "手动亮度解限至 1250 nits",
-                    summary = "将手动滑块正常上限由 800 nits (4095) 拓宽至杜比视界上限 1250 nits (4543)",
+                    title = "手动最高亮度提升",
+                    summary = "将手动滑块上限提升至 1250 nits",
                     showDivider = true
                 ) {
                     MiuixSwitch(
@@ -96,8 +98,22 @@ fun MainScreen() {
                 }
 
                 MiuixPreferenceItem(
-                    title = "阻断 FOSS 15% 亮度暗扣",
-                    summary = "拦截 ColorOS 对微信、B站、微博、抖音等应用的后台自动偷扣 15% 亮度惩罚",
+                    title = "解锁最高亮度限制 (1600 nits)",
+                    summary = "试验性功能：将亮度滑块上限开放至屏幕硬件峰值 1600 nits",
+                    showDivider = true
+                ) {
+                    MiuixSwitch(
+                        checked = manual1600,
+                        onCheckedChange = {
+                            manual1600 = it
+                            updatePref(ConfigManager.KEY_MANUAL_1600, it)
+                        }
+                    )
+                }
+
+                MiuixPreferenceItem(
+                    title = "阻止 FOSS 自动降亮",
+                    summary = "拦截针对特定应用的 15% 亮度扣减",
                     showDivider = true
                 ) {
                     MiuixSwitch(
@@ -110,8 +126,8 @@ fun MainScreen() {
                 }
 
                 MiuixPreferenceItem(
-                    title = "修复 AOSP hdrSdrRatio",
-                    summary = "修复 Android 16 比例死锁在 1.0 的缺陷，精准锚定 1.56，激发 Ultra HDR 照片高光",
+                    title = "修复 HDR 亮度比例",
+                    summary = "锁定 hdrSdrRatio 为 1.56，正常显示 Ultra HDR 高光",
                     showDivider = false
                 ) {
                     MiuixSwitch(
@@ -124,11 +140,11 @@ fun MainScreen() {
                 }
             }
 
-            // 卡片 2：色彩科学与界面控制
-            MiuixCard(title = "色彩科学与界面") {
+            // 卡片 2：色彩与深色模式
+            MiuixCard(title = "色彩与深色模式") {
                 MiuixPreferenceItem(
                     title = "深色模式三档调节",
-                    summary = "击穿 API 36 出厂隐藏门禁，复原原生“增强(纯黑) / 适中(深灰) / 柔和(中灰)”及图片预览",
+                    summary = "开启增强、适中、柔和三档深色样式选择及效果预览",
                     showDivider = true
                 ) {
                     MiuixSwitch(
@@ -142,7 +158,7 @@ fun MainScreen() {
 
                 MiuixPreferenceItem(
                     title = "色温球作为自适应基底",
-                    summary = "解除自适应/护眼时色温球的禁用置灰，将环境自适应与护眼变化叠加在用户校准白点底色之上",
+                    summary = "解除色温球调节限制，将护眼与环境色调节叠加在色温球白点上",
                     showDivider = false
                 ) {
                     MiuixSwitch(
@@ -155,43 +171,14 @@ fun MainScreen() {
                 }
             }
 
-            // 卡片 3：安全与架构准则
-            MiuixCard(title = "架构与安全边界") {
-                MiuixPreferenceItem(
-                    title = "温控保护保持原厂",
-                    summary = "本模块坚决不改动任何温控逻辑与降频限额，极端发热时由原厂温控全权保护硬件",
-                    showDivider = true
-                ) {
-                    Text(
-                        text = "100% 原厂",
-                        color = Color(0xFF34C759),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                MiuixPreferenceItem(
-                    title = "纯内存运行 / 完全可逆",
-                    summary = "绝不修改 /system 或 /my_product 任何物理分区，在 LSPosed 管理器中可随时停用",
-                    showDivider = false
-                ) {
-                    Text(
-                        text = "Systemless",
-                        color = Color(0xFF0D84FF),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 快捷热重启
+            // 快捷热重载
             Button(
                 onClick = {
                     try {
                         Runtime.getRuntime().exec(arrayOf("su", "-c", "killall com.android.settings com.android.systemui"))
-                        Toast.makeText(context, "已重载系统设置与 SystemUI 作用域", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "已重载系统设置与界面服务", Toast.LENGTH_SHORT).show()
                     } catch (e: Exception) {
                         Toast.makeText(context, "执行热重载需要 Root 权限: ${e.message}", Toast.LENGTH_SHORT).show()
                     }
@@ -206,7 +193,7 @@ fun MainScreen() {
                 )
             ) {
                 Text(
-                    text = "热重载系统设置与界面 (无需重启平板)",
+                    text = "重载系统设置与界面",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold
                 )

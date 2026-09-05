@@ -14,7 +14,7 @@
             android:value="true" />
         <meta-data
             android:name="xposeddescription"
-            android:value="OPPO Pad Mini 显示与画质增强 (手动1250nits/HDR/FOSS阻断/深色三档/色温基底)" />
+            android:value="ColorOS 屏幕显示与画质增强 (手动亮度解限/HDR比例/深色模式三档/色温球基底)" />
         <meta-data
             android:name="xposedminversion"
             android:value="82" />
