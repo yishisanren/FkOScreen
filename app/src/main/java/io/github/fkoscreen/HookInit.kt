@@ -1,0 +1,33 @@
+package io.github.fkoscreen
+
+import de.robv.android.xposed.IXposedHookLoadPackage
+import de.robv.android.xposed.XposedBridge
+import de.robv.android.xposed.callbacks.XC_LoadPackage
+import io.github.fkoscreen.hooks.*
+
+class HookInit : IXposedHookLoadPackage {
+    companion object {
+        private const val TAG = "FkOScreen:HookInit"
+    }
+
+    override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
+        when (lpparam.packageName) {
+            "android" -> {
+                XposedBridge.log("$TAG: Hooking system_server (Display & Brightness Engine)...")
+                BrightnessLimitHook.init(lpparam.classLoader)
+                FossBypassHook.init(lpparam.classLoader)
+                HdrRatioHook.init(lpparam.classLoader)
+                ColorBallAnchorHook.initSystemServer(lpparam.classLoader)
+            }
+            "com.android.settings" -> {
+                XposedBridge.log("$TAG: Hooking com.android.settings (UI & Controls)...")
+                DarkModeStyleHook.init(lpparam.classLoader)
+                ColorBallAnchorHook.initSettings(lpparam.classLoader)
+            }
+            "com.android.systemui" -> {
+                XposedBridge.log("$TAG: Hooking com.android.systemui (HDR & QuickSettings)...")
+                HdrRatioHook.init(lpparam.classLoader)
+            }
+        }
+    }
+}

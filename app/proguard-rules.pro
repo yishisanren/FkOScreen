@@ -1,0 +1,2 @@
+-keep class io.github.fkoscreen.HookInit { *; }
+-keep class io.github.fkoscreen.hooks.** { *; }
