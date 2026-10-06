@@ -1,0 +1,10 @@
+FkOScreen
+Copyright 2026 benbaobaoshigemi
+Upstream: https://github.com/benbaobaoshigemi/FkOScreen
+Base commit: da7499dbce5b21cb2209f689c97c76b156b87327
+
+This fork contains ColorOS 17 compatibility changes maintained in
+https://github.com/yishisanren/FkOScreen.
+The compatibility entry, configuration synchronization, module scope,
+version metadata, build helper, and documentation were modified in October 2026.
+The original upstream LICENSE is retained.

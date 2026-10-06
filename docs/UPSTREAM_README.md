@@ -1,0 +1,65 @@
+# FkOScreen (ColorOS 屏幕显示与画质增强)
+
+[![LSPosed Module](https://img.shields.io/badge/LSPosed-Module-blue.svg)](https://github.com/LSPosed/LSPosed)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-ColorOS%20%2F%20Android%2014%2B-green.svg)](https://android.com)
+
+为 ColorOS / Android 14+（深度适配 OPPO Pad Mini / OnePlus 等设备）量身打造的屏幕显示底层增强 LSPosed 模块。突破系统层层软件钳制，完全释放屏幕物理面板硬件潜能，并配备纯正 MIUIX 原生风格控制中心。
+
+---
+
+## 核心特性
+
+### 1. 屏幕亮度与 HDR 增强
+- **高亮激发模式 (HBM) 手动提升**：突破系统 SDR 手动滑块默认封顶限制，允许手动平滑调节至全屏激发亮度档位。
+- **阻止 FOSS 自动降亮**：拦截系统针对特定前台应用的 15% 自动画质/亮度扣减机制。
+- **修复 HDR 亮度比例**：锁定 `hdrSdrRatio` 为 1.56，使 Ultra HDR 高光细节在日常及相册中正常通透映射。
+
+### 2. 屏幕色彩正交双滑块调节
+- **数学正交解耦**：将系统底层的二维色温球坐标解耦为互不干扰的独立双轴：
+  - **冷暖色温微调**：沿对角线精准调节白点色温（极暖 -100% ~ 极冷 +100%）。
+  - **青品偏色校正**：沿垂直轴校正面板偏色（偏青 -100% ~ 偏品 +100%）。
+- **双向无缝同步**：双滑块数值、RGB 输出增益矩阵与系统原生设置双向防抖同步，无颤动无回环。
+- **一键复位默认**：随时将白点与增益复位回出厂基准（6500K 标准）。
+
+### 3. 色彩与深色模式进阶
+- **深色模式三档调节**：在设置中开启“增强”、“适中”、“柔和”三档深色样式选择及实时效果预览。
+- **色温球作为自适应基底**：解除色温球调节限制，使系统护眼模式与环境色自适应无缝叠加在自定义白点之上。
+
+### 4. 试验性极限功能 (最底部独立卡片)
+- **解锁硬件极限峰值亮度**：解除系统层层阈值限制，直接开放面板最高物理硬件极限亮度（驱动寄存器 100% 满档）。
+- **解除温度对亮度限制**：拦截系统底层温控流水线（`OplusFeatureTemperatureLimitBrightness`），高温运行与游戏场景下保持高亮不主动暗屏。
+
+### 5. 纯正 MIUIX 原生风格设计
+- 100% 严格基于官方 `top.yukonga.miuix.kmp` 组件库构建，提供沉浸式 MIUIX / HyperOS 级视觉卡片与阻尼交互体验。
+
+---
+
+## 作用域说明
+
+在 LSPosed 管理器中启用模块并勾选以下作用域：
+- **系统框架 (system_server / `android`)**：挂载底层显示电源管理、HDR 比例、温控截断与亮度模型；
+- **系统设置 (`com.android.settings`)**：注入深色模式三档与色彩设置选项；
+- **系统界面 (`com.android.systemui`)**：扩展状态栏控制中心与亮度滑块控制器上限；
+- **设置存储 (`com.android.providers.settings`)**：放行色彩与亮度参数实时读写。
+
+---
+
+## 构建与安装
+
+### 本地编译
+```bash
+./gradlew assembleRelease
+```
+编译产物位于 `app/build/outputs/apk/release/app-release.apk`。
+
+### 一键真机部署
+```bash
+./deploy.sh
+```
+
+---
+
+## 开源协议
+
+本项目基于 [Apache License 2.0](LICENSE) 协议开源。

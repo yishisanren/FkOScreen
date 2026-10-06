@@ -1,65 +1,51 @@
-# FkOScreen (ColorOS 屏幕显示与画质增强)
+# FkOScreen · ColorOS 17
 
-[![LSPosed Module](https://img.shields.io/badge/LSPosed-Module-blue.svg)](https://github.com/LSPosed/LSPosed)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-ColorOS%20%2F%20Android%2014%2B-green.svg)](https://android.com)
+本仓库是 [benbaobaoshigemi/FkOScreen](https://github.com/benbaobaoshigemi/FkOScreen) 的 ColorOS 17 适配 Fork，基于上游 `da7499dbce5b21cb2209f689c97c76b156b87327`。保留原版 Compose/Miuix 界面，适配当前系统的亮度、HDR 和色温接口。
 
-为 ColorOS / Android 14+（深度适配 OPPO Pad Mini / OnePlus 等设备）量身打造的屏幕显示底层增强 LSPosed 模块。突破系统层层软件钳制，完全释放屏幕物理面板硬件潜能，并配备纯正 MIUIX 原生风格控制中心。
+**[下载 1.0 Release](https://github.com/yishisanren/FkOScreen/releases/tag/v1.0)**
 
----
+Release 名称为 **1.0**；APK 内部版本为 `1.0.0-coloros17.1`，versionCode 为 `2`。这是未启用 `debuggable` 的适配包，使用本地测试签名，与原作者签名不同。
 
-## 核心特性
+## 已验证环境
 
-### 1. 屏幕亮度与 HDR 增强
-- **高亮激发模式 (HBM) 手动提升**：突破系统 SDR 手动滑块默认封顶限制，允许手动平滑调节至全屏激发亮度档位。
-- **阻止 FOSS 自动降亮**：拦截系统针对特定前台应用的 15% 自动画质/亮度扣减机制。
-- **修复 HDR 亮度比例**：锁定 `hdrSdrRatio` 为 1.56，使 Ultra HDR 高光细节在日常及相册中正常通透映射。
+OPPO PME110，`PME110_17.0.0.102(CN01)`，Android 17 / API 37，LSPosed 2.2.1 (7912)。其他机型或系统版本尚未验证。
 
-### 2. 屏幕色彩正交双滑块调节
-- **数学正交解耦**：将系统底层的二维色温球坐标解耦为互不干扰的独立双轴：
-  - **冷暖色温微调**：沿对角线精准调节白点色温（极暖 -100% ~ 极冷 +100%）。
-  - **青品偏色校正**：沿垂直轴校正面板偏色（偏青 -100% ~ 偏品 +100%）。
-- **双向无缝同步**：双滑块数值、RGB 输出增益矩阵与系统原生设置双向防抖同步，无颤动无回环。
-- **一键复位默认**：随时将白点与增益复位回出厂基准（6500K 标准）。
+## 适配内容
 
-### 3. 色彩与深色模式进阶
-- **深色模式三档调节**：在设置中开启“增强”、“适中”、“柔和”三档深色样式选择及实时效果预览。
-- **色温球作为自适应基底**：解除色温球调节限制，使系统护眼模式与环境色自适应无缝叠加在自定义白点之上。
+- 手动 HBM：接入新版亮度模型、BrightnessInfo 和 OPlus 控制中心滑杆范围。关闭自动亮度后，滑杆可调到本机 HBM 档，关闭 HBM 后恢复原生上限。
+- HDR：返回独立 DisplayInfo 副本；开关变化时使客户端显示缓存失效，关闭后恢复原生 HDR/SDR 比例。
+- 色彩双滑杆：接入新版 `color.config` / `color.control` / `color.model` 管线，叠加色温球 RGB 白点并触发原生 CCT 重绘。
+- 系统设置：开放深色模式增强、适中、柔和三个选项，以及色温球入口。
+- 跨进程配置：使用 `Settings.System` 和 `ContentObserver` 同步。写入放行仅针对模块自身 UID 与明确的配置键。
+- FOSS：接入本机仍存在的 `getReduceInfo` / `getFossInfo` 接口；未测量特定应用实际降亮幅度。
 
-### 4. 试验性极限功能 (最底部独立卡片)
-- **解锁硬件极限峰值亮度**：解除系统层层阈值限制，直接开放面板最高物理硬件极限亮度（驱动寄存器 100% 满档）。
-- **解除温度对亮度限制**：拦截系统底层温控流水线（`OplusFeatureTemperatureLimitBrightness`），高温运行与游戏场景下保持高亮不主动暗屏。
+峰值亮度与温控绕过属于实验功能，默认关闭；没有做高温或长时峰值测试。
 
-### 5. 纯正 MIUIX 原生风格设计
-- 100% 严格基于官方 `top.yukonga.miuix.kmp` 组件库构建，提供沉浸式 MIUIX / HyperOS 级视觉卡片与阻尼交互体验。
+## 安装
 
----
+1. 设备需 Root，并安装支持 legacy 模块的 LSPosed。
+2. 安装 Release 中的 APK；在 LSPosed 中启用并勾选**系统框架（`system`）**、**系统界面（`com.android.systemui`）**、**设置（`com.android.settings`）**。
+3. 授予模块修改设置权限。可在 Root shell 中执行：
 
-## 作用域说明
+   ```sh
+   pm grant io.github.benbaobaoshigemi.fkoscreen android.permission.WRITE_SECURE_SETTINGS
+   appops set io.github.benbaobaoshigemi.fkoscreen WRITE_SETTINGS allow
+   ```
 
-在 LSPosed 管理器中启用模块并勾选以下作用域：
-- **系统框架 (system_server / `android`)**：挂载底层显示电源管理、HDR 比例、温控截断与亮度模型；
-- **系统设置 (`com.android.settings`)**：注入深色模式三档与色彩设置选项；
-- **系统界面 (`com.android.systemui`)**：扩展状态栏控制中心与亮度滑块控制器上限；
-- **设置存储 (`com.android.providers.settings`)**：放行色彩与亮度参数实时读写。
+4. 完整重启，然后打开模块设置。
 
----
+本机 SettingsProvider 与系统框架共享进程，不需要额外勾选“设置存储”。手动 HBM 只在关闭系统“自动调节”后扩展范围。
 
-## 构建与安装
+若已安装原作者版本，因签名不同，可能需先卸载原版；卸载只会移除该模块自身配置。回退显示效果时，在 LSPosed 关闭本模块并重启。
 
-### 本地编译
-```bash
-./gradlew assembleRelease
-```
-编译产物位于 `app/build/outputs/apk/release/app-release.apk`。
+## 验收与构建
 
-### 一键真机部署
-```bash
-./deploy.sh
-```
+- [真机验收说明](docs/ACCEPTANCE.md)：工具实测结果与未验证范围。
+- [构建说明](docs/BUILD.md)：Release 的构建方法、工具依赖及签名要求。
+- [上游 README](docs/UPSTREAM_README.md)：保留原版说明，不作为本适配版兼容性承诺。
 
----
+没有用光度计测量真实亮度或色准，也没有确认 Ultra HDR 高光观感。亮度曲线中的 nits 参数不等于光学实测值。
 
-## 开源协议
+## 许可
 
-本项目基于 [Apache License 2.0](LICENSE) 协议开源。
+沿用上游 [Apache License 2.0](LICENSE)，作者及改动说明见 [NOTICE](NOTICE)。签名私钥不在仓库中。

@@ -134,21 +134,6 @@ object ConfigManager {
     }
 
     fun fixPermissions(context: Context) {
-        try {
-            val prefsFile = File(context.filesDir.parentFile, "shared_prefs/$PREFS_NAME.xml")
-            if (prefsFile.exists()) {
-                prefsFile.setReadable(true, false)
-                prefsFile.parentFile?.setReadable(true, false)
-                prefsFile.parentFile?.setExecutable(true, false)
-                // 确保 /data/data/io.github.fkoscreen 目录对其它 UID 具有 +x 遍历权限
-                context.filesDir.parentFile?.setExecutable(true, false)
-                context.filesDir.parentFile?.setReadable(true, false)
-                Thread {
-                    try {
-                        Runtime.getRuntime().exec(arrayOf("su", "-c", "chmod 666 ${prefsFile.absolutePath}")).waitFor()
-                    } catch (_: Throwable) {}
-                }.start()
-            }
-        } catch (_: Exception) {}
+        io.github.fkoscreen.compat.RuntimeConfig.syncAppPrefs(context)
     }
 }

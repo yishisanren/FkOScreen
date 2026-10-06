@@ -9,3 +9,11 @@ build/
 .externalNativeBuild
 .cxx
 local.properties
+/local/
+*.jks
+*.keystore
+*.p12
+*.pem
+*.apk
+*.idsig
+__pycache__/

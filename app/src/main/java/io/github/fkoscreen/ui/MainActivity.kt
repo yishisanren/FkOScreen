@@ -47,6 +47,7 @@ import kotlin.math.roundToInt
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        io.github.fkoscreen.compat.RuntimeConfig.syncAppPrefs(this)
         setContent {
             MiuixTheme {
                 MainScreen()
