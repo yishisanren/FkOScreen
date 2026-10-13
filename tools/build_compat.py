@@ -9,8 +9,8 @@ import tempfile
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-ORIGINAL_SHA256 = "d7bd4b5af81d3310e67abac0766d8ba45d599b3d7d3e7deee01a1f52141abe88"
-VERSION = "1.0.0-coloros17.1"
+ORIGINAL_SHA256 = "d1821d95f2f1adcc666b6fb96587a57fb8f4c3f6629bfbb429a86ef62cd57a4b"
+VERSION = "1.1.0-coloros17.1"
 
 
 def main():
@@ -25,7 +25,7 @@ def main():
     p.add_argument("--output", type=Path, default=ROOT / "build/compat" / f"FkOScreen-{VERSION}.apk")
     a = p.parse_args()
     if hashlib.sha256(a.source_apk.read_bytes()).hexdigest() != ORIGINAL_SHA256:
-        p.error("Source APK does not match upstream v1.0.0 SHA-256")
+        p.error("Source APK does not match upstream v1.1.0 SHA-256")
     if not os.environ.get("FKO_KEYSTORE_PASSWORD"):
         p.error("Set FKO_KEYSTORE_PASSWORD before signing")
     a.output = a.output.resolve()
@@ -85,7 +85,7 @@ def main():
         activity.write_text(content.replace(needle, needle + "\n\n    invoke-static {p0}, "
                             "Lio/github/fkoscreen/compat/RuntimeConfig;->syncAppPrefs(Landroid/content/Context;)V"))
         metadata = decoded / "apktool.yml"
-        content = re.sub(r"versionCode: .*", "versionCode: 2", metadata.read_text())
+        content = re.sub(r"versionCode: .*", "versionCode: 3", metadata.read_text())
         content = re.sub(r"versionName: .*", f"versionName: {VERSION}", content)
         metadata.write_text(content)
         run(a.java_home / "bin/java", "-jar", a.apktool, "b", decoded, "-o", w / "unsigned.apk")

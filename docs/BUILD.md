@@ -1,8 +1,8 @@
 # 构建说明
 
-1.0 Release 使用原版 `v1.0.0` APK 为基线，保留其资源、Compose/Miuix 界面及依赖，在 `classes4.dex` 加入当前仓库中的 Java 兼容入口，并修改配置同步、作用域及版本号。Gradle 工程中的源码同步记录了对应改动；本次发布包由下述流程构建。
+1.1 Release 使用原版 `v1.1.0` APK 为基线，保留新版资源、Compose/Miuix 界面及 Kotlin 功能，在 `classes4.dex` 加入当前仓库中的 Java 兼容入口，并修改配置同步、作用域及版本号。兼容入口保留已验证的亮度/HDR/色温修复，并调用上游新增的 AOD、144Hz、晕动和护眼界面入口；护眼系统端使用当前原生管线。Gradle 工程同步记录对应源码改动。
 
-构建脚本已完整实跑，通过签名和 zipalign 校验；生成包中的四份 dex、AndroidManifest.xml、resources.arsc 与真机验收版一致。Release 仍发布原先已安装验证的 APK。Gradle Release 配置明确关闭 debuggable，未绑定 debug 签名，独立 Gradle 构建需自行配置签名；本次未以 Gradle 输出替换验收包。
+构建脚本已完整实跑，通过签名和 zipalign 校验。Gradle Release 配置明确关闭 debuggable，未绑定 debug 签名；独立 Gradle 构建需自行配置签名。本次采用下述构建流程，不以独立 Gradle 输出替换验收包。
 
 ## 工具依赖
 
@@ -12,10 +12,10 @@
 - Xposed API 82 JAR，仅用于编译。
 - 自己的签名密钥。仓库和 Release 不提供本次签名私钥。
 
-将原作者 [v1.0.0 Release](https://github.com/benbaobaoshigemi/FkOScreen/releases/tag/v1.0.0) 中的 APK 下载到本地。脚本要求其 SHA-256 为：
+将原作者 [v1.1.0 Release](https://github.com/benbaobaoshigemi/FkOScreen/releases/tag/v1.1.0) 中的 APK 下载到本地。脚本要求其 SHA-256 为：
 
 ```text
-d7bd4b5af81d3310e67abac0766d8ba45d599b3d7d3e7deee01a1f52141abe88
+d1821d95f2f1adcc666b6fb96587a57fb8f4c3f6629bfbb429a86ef62cd57a4b
 ```
 
 ## 构建适配包
@@ -27,7 +27,7 @@ read -s FKO_KEYSTORE_PASSWORD
 export FKO_KEYSTORE_PASSWORD
 
 python3 tools/build_compat.py \
-  --source-apk local/io.github.benbaobaoshigemi.fkoscreen-v1.0.0.apk \
+  --source-apk local/io.github.benbaobaoshigemi.fkoscreen-v1.1.0.apk \
   --sdk "$ANDROID_SDK_ROOT" \
   --java-home "$JAVA_HOME" \
   --apktool local/apktool.jar \
@@ -38,7 +38,7 @@ python3 tools/build_compat.py \
 unset FKO_KEYSTORE_PASSWORD
 ```
 
-默认输出为 `build/compat/FkOScreen-1.0.0-coloros17.1.apk`，同时输出 SHA256SUMS.txt。若私钥密码与 keystore 密码不同，可另设置 `FKO_KEY_PASSWORD`。
+默认输出为 `build/compat/FkOScreen-1.1.0-coloros17.1.apk`，versionCode 3，同时输出 SHA256SUMS.txt。若私钥密码与 keystore 密码不同，可另设置 `FKO_KEY_PASSWORD`。
 
 脚本依次执行：核对原包哈希 → 编译兼容类 → D8 → 解包原包 → 添加兼容 dex / 同步调用 → apktool → zipalign → 签名 → 签名和包内容校验。
 

@@ -80,6 +80,12 @@ fun MainScreen() {
     var hdrRatio by remember { mutableStateOf(prefs.getBoolean(ConfigManager.KEY_HDR_RATIO, true)) }
     var darkModeStyles by remember { mutableStateOf(prefs.getBoolean(ConfigManager.KEY_DARK_MODE_STYLES, true)) }
     var colorBallAnchor by remember { mutableStateOf(prefs.getBoolean(ConfigManager.KEY_COLOR_BALL_ANCHOR, true)) }
+    var aodBrightnessScale by remember {
+        mutableFloatStateOf(
+            prefs.getFloat(ConfigManager.KEY_AOD_BRIGHTNESS_SCALE, ConfigManager.DEFAULT_AOD_BRIGHTNESS_SCALE)
+                .coerceIn(ConfigManager.MIN_AOD_BRIGHTNESS_SCALE, ConfigManager.MAX_AOD_BRIGHTNESS_SCALE)
+        )
+    }
 
     val initialColorState = remember { ColorBallCalculator.readFromSystem(context) }
     var cctValue by remember { mutableFloatStateOf(initialColorState.cct) }
@@ -158,11 +164,7 @@ fun MainScreen() {
     }
 
     fun updatePref(key: String, value: Boolean) {
-        prefs.edit().putBoolean(key, value).apply()
-        ConfigManager.fixPermissions(context)
-        try {
-            android.provider.Settings.System.putInt(context.contentResolver, key, if (value) 1 else 0)
-        } catch (_: Throwable) {}
+        ConfigManager.writeConfig(context, key, value)
     }
 
     LaunchedEffect(Unit) {
@@ -199,12 +201,15 @@ fun MainScreen() {
         if (needCommit) {
             editor.apply()
         }
-        ConfigManager.fixPermissions(context)
-        try {
-            android.provider.Settings.System.putInt(context.contentResolver, ConfigManager.KEY_MANUAL_HBM, if (manualHbm) 1 else 0)
-            android.provider.Settings.System.putInt(context.contentResolver, ConfigManager.KEY_MANUAL_PEAK, if (manualPeak) 1 else 0)
-            android.provider.Settings.System.putInt(context.contentResolver, ConfigManager.KEY_THERMAL_BYPASS, if (thermalBypass) 1 else 0)
-        } catch (_: Throwable) {}
+        // 每次打开界面都把全部开关同步到 Settings.System，hook 侧只认这一处
+        updatePref(ConfigManager.KEY_MANUAL_HBM, manualHbm)
+        updatePref(ConfigManager.KEY_MANUAL_PEAK, manualPeak)
+        updatePref(ConfigManager.KEY_THERMAL_BYPASS, thermalBypass)
+        updatePref(ConfigManager.KEY_FOSS_BYPASS, fossBypass)
+        updatePref(ConfigManager.KEY_HDR_RATIO, hdrRatio)
+        updatePref(ConfigManager.KEY_DARK_MODE_STYLES, darkModeStyles)
+        updatePref(ConfigManager.KEY_COLOR_BALL_ANCHOR, colorBallAnchor)
+        ConfigManager.writeConfig(context, ConfigManager.KEY_AOD_BRIGHTNESS_SCALE, aodBrightnessScale)
     }
 
     Scaffold(
@@ -253,6 +258,23 @@ fun MainScreen() {
                         hdrRatio = it
                         updatePref(ConfigManager.KEY_HDR_RATIO, it)
                     }
+                )
+                SliderPreference(
+                    title = "AOD 亮度",
+                    summary = "全景息屏亮度系数，暗处 (< 25 lux) 保持原生；不会超过息屏前的屏幕亮度",
+                    value = aodBrightnessScale,
+                    onValueChange = { aodBrightnessScale = it },
+                    onValueChangeFinished = {
+                        ConfigManager.writeConfig(context, ConfigManager.KEY_AOD_BRIGHTNESS_SCALE, aodBrightnessScale)
+                    },
+                    valueRange = ConfigManager.MIN_AOD_BRIGHTNESS_SCALE..ConfigManager.MAX_AOD_BRIGHTNESS_SCALE,
+                    valueText = if (Math.abs(aodBrightnessScale - ConfigManager.DEFAULT_AOD_BRIGHTNESS_SCALE) < 0.005f) {
+                        "原生 (×0.63)"
+                    } else {
+                        "×${"%.2f".format(aodBrightnessScale)}"
+                    },
+                    showKeyPoints = true,
+                    keyPoints = listOf(ConfigManager.DEFAULT_AOD_BRIGHTNESS_SCALE)
                 )
             }
 

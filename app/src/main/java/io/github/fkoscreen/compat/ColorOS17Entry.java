@@ -15,7 +15,7 @@ import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
-/** Verified against the classes shipped in PME110_17.0.0.102(CN01), API 37. */
+/** ColorOS 17 compatibility entry; keeps upstream 1.1 capabilities alongside verified fixes. */
 public final class ColorOS17Entry implements IXposedHookLoadPackage {
     private static final Set<String> logged = Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
     private static volatile float panelBrightness, panelNit, hbmBrightness, hbmNit;
@@ -51,7 +51,7 @@ public final class ColorOS17Entry implements IXposedHookLoadPackage {
     }
 
     @Override public void handleLoadPackage(XC_LoadPackage.LoadPackageParam p) {
-        log("loaded " + p.packageName + " process=" + p.processName + " build=1.0.0-coloros17.1");
+        log("loaded " + p.packageName + " process=" + p.processName + " build=1.1.0-coloros17.1");
         switch (p.packageName) {
             case "android":
                 brightness(p.classLoader);
@@ -59,13 +59,36 @@ public final class ColorOS17Entry implements IXposedHookLoadPackage {
                 hdr(p.classLoader);
                 hdrServer(p.classLoader);
                 color(p.classLoader);
+                upstream("RefreshRate144Hook", "initSystemServer", p.classLoader);
+                ColorOS17Features.readMode(p.classLoader);
+                ColorOS17Features.thermal(p.classLoader);
                 break;
             case "com.android.systemui":
                 hdr(p.classLoader);
                 brightnessUi(p.classLoader);
+                upstream("AodBrightnessHook", "init", p.classLoader);
                 break;
-            case "com.android.settings": settingsUi(p.classLoader); break;
+            case "com.android.settings":
+                settingsUi(p.classLoader);
+                upstream("RefreshRate144Hook", "initSettings", p.classLoader);
+                upstream("MotionSicknessHook", "initSettings", p.classLoader);
+                break;
+            case "com.oplus.eyeprotect":
+                upstream("EyeProtectReadModeHook", "initEyeProtect", p.classLoader);
+                break;
             case "com.android.providers.settings": provider(p.classLoader); break;
+        }
+    }
+
+    private static void upstream(String name, String method, ClassLoader target) {
+        try {
+            Class<?> type = XposedHelpers.findClass("io.github.fkoscreen.hooks." + name,
+                ColorOS17Entry.class.getClassLoader());
+            Object instance = XposedHelpers.getStaticObjectField(type, "INSTANCE");
+            XposedHelpers.callMethod(instance, method, target);
+            log("upstream entry " + name + "." + method + " completed");
+        } catch (Throwable t) {
+            log("upstream entry failed " + name + "." + method + ": " + t);
         }
     }
 
@@ -454,7 +477,8 @@ public final class ColorOS17Entry implements IXposedHookLoadPackage {
     private static boolean allowedKey(Object key) {
         if (!(key instanceof String)) return false;
         for (String s : RuntimeConfig.KEYS) if (s.equals(key)) return true;
-        return "eyeprotect_rgb".equals(key) || "color_ball_last_pointx".equals(key)
+        return "aod_brightness_scale".equals(key)
+            || "eyeprotect_rgb".equals(key) || "color_ball_last_pointx".equals(key)
             || "color_ball_last_pointy".equals(key) || "color_temperate_ball_mode".equals(key);
     }
     private static void provider(ClassLoader cl) {

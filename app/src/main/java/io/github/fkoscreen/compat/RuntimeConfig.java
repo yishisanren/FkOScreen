@@ -52,6 +52,7 @@ public final class RuntimeConfig {
             for (String key : KEYS) observe(c, key);
             observe(c, "eyeprotect_rgb");
             observe(c, "screen_brightness_mode");
+            observe(c, "aod_brightness_scale");
             observing = true;
         } catch (Throwable t) {
             ColorOS17Entry.log("config observer unavailable: " + t.getClass().getSimpleName());
@@ -120,6 +121,10 @@ public final class RuntimeConfig {
         try {
             for (int i = 0; i < KEYS.length; i++)
                 Settings.System.putInt(c.getContentResolver(), KEYS[i], p.getBoolean(KEYS[i], DEFAULTS[i]) ? 1 : 0);
+            float aod = p.getFloat("aod_brightness_scale", 0.625f);
+            if (!Float.isFinite(aod)) aod = 0.625f;
+            aod = Math.max(0.5f, Math.min(1.0f, aod));
+            Settings.System.putFloat(c.getContentResolver(), "aod_brightness_scale", aod);
         } catch (Throwable t) {
             android.util.Log.w("FkOScreen17", "Settings permission not granted; allow modify system settings", t);
         }
